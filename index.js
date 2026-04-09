@@ -75,90 +75,55 @@ const getNum = (val) => {
     return Number(val);
 };
 
-// [궁극의 해결책] C++ 엔진인 BatchPlay를 직접 호출하여 "마스크(Mask)"와 "효과(Effect)"가 완전히 제외된 순수 픽셀 영역(boundsNoMask)만 추출하는 비동기 함수
-async function getRealBoundsInfo(layer) {
+// [초궁극의 해결책] 레이어를 임시 복제 -> 빈 그룹으로 묶기 -> 병합(Cmd+E)하여 마스크/보정레이어/숨겨진 찌꺼기를 화면에 보이는 순수 픽셀(알맹이) 하나로 완벽하게 구워낸 뒤 크기를 재고 삭제하는 비동기 함수
+async function getVisualRasterBounds(layer, doc) {
     try {
-        const bp = await batchPlay([
+        const originalSelection = Array.from(doc.activeLayers || []);
+        
+        // 1. 레이어 원본 안전하게 복제
+        const dup = await layer.duplicate();
+        doc.activeLayers = [dup];
+        
+        // 2. 복제된 레이어를 그룹으로 묶기 (Cmd+G) => 배경 등과 섞이지 않고 모든 마스크/효과를 가두기 위함
+        await batchPlay([
             {
-                "_obj": "get",
-                "_target": [
-                    { "_property": "boundsNoMask" },
-                    { "_ref": "layer", "_id": layer.id }
-                ]
+                "_obj": "make",
+                "_target": [ { "_ref": "layerSection" } ],
+                "from": { "_ref": "layer", "_enum": "ordinal", "_value": "targetEnum" }
             }
         ], {});
         
-        let b = bp[0].boundsNoMask;
+        // 3. 그룹 병합 (Cmd+E) => 이 순간 모든 마스크 영역은 잘려나가고, 오직 눈에 보이는 픽셀들만 하나로 뭉침!
+        await batchPlay([
+            { "_obj": "mergeLayersNew" }
+        ], {});
         
-        if (b) {
-            const l = getNum(b.left);
-            const t = getNum(b.top);
-            const r = getNum(b.right);
-            const bm = getNum(b.bottom);
-            if (!isNaN(l) && !isNaN(t) && !isNaN(r) && !isNaN(bm)) {
-                 return { left: l, top: t, right: r, bottom: bm };
-            }
-        }
+        // 4. 구워진 단일 픽셀 레이어의 Bounds 수집
+        const mergedLayer = doc.activeLayers[0];
+        const b = mergedLayer.bounds;
+        
+        const rb = {
+            left: getNum(b.left),
+            top: getNum(b.top),
+            right: getNum(b.right),
+            bottom: getNum(b.bottom)
+        };
+        
+        // 5. 사용 끝난 더미 레이어 영구 삭제 조치
+        await mergedLayer.delete();
+        
+        // 선택 복구
+        doc.activeLayers = originalSelection;
+        
+        // 완전 빈 껍데기 방지
+        if (rb.left === 0 && rb.right === 0 && rb.top === 0 && rb.bottom === 0) return null;
+        if (isNaN(rb.left) || isNaN(rb.right) || isNaN(rb.top) || isNaN(rb.bottom)) return null;
+        
+        return rb;
+        
     } catch(err) {
-        console.error("boundsNoMask 실패:", err);
-    }
-    
-    // 만약 boundsNoMask 호출 실패 시 (구버전 포토샵), 기존의 재귀 검색(getRealBounds) 폴백
-    return getRealBounds(layer);
-}
-
-// [신규 기능] 그룹 내부를 검사하여 Adjustment Layer (무한 캔버스 마스크) 등을 제외한 '실제' 픽셀 영역만 계산
-function getRealBounds(layer) {
-    // UXP DOM에서 폴더/그룹은 주로 children 속성(또는 layers)에 내부 요소들이 배열로 담깁니다.
-    const childrenNodes = layer.children || layer.layers || [];
-    
-    if ((layer.kind && (layer.kind === "group" || layer.kind.toString().toLowerCase().includes("group"))) || layer.typeName === "LayerSet" || layer.isGroupLayer || childrenNodes.length > 0) {
-        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
-        let hasValidChild = false;
-        
-        childrenNodes.forEach(child => {
-            const b = getRealBounds(child);
-            if (b && !isNaN(b.left) && !isNaN(b.top)) {
-                left = Math.min(left, b.left);
-                top = Math.min(top, b.top);
-                right = Math.max(right, b.right);
-                bottom = Math.max(bottom, b.bottom);
-                hasValidChild = true;
-            }
-        });
-        
-        if (hasValidChild && left !== Infinity) {
-            return { left, top, right, bottom };
-        }
-        // 유효한 자식이 없으면 억지로 자신의 bounds를 반환하지 않고 null 처리 (보정 레이어로 꽉 찬 빈 그룹 등)
-        return null;
-    } 
-    else {
-        // 단일 개체일 때
-        const kindStr = layer.kind ? layer.kind.toString().toUpperCase() : "";
-        // 화면 전역을 덮어 Bounds를 팽창시키는 보정 레이어 류
-        const ignoreKinds = [
-            "BRIGHTNESSCONTRAST", "LEVELS", "CURVES", "EXPOSURE", "VIBRANCE", 
-            "HUESATURATION", "COLORBALANCE", "BLACKANDWHITE", "PHOTOFILTER", 
-            "CHANNELMIXER", "COLORLOOKUP", "INVERT", "POSTERIZE", "THRESHOLD", 
-            "GRADIENTMAP", "SELECTIVECOLOR", "PATTERNFILL", "GRADIENTFILL", "SOLIDCOLOR", "ADJUSTMENT"
-        ];
-        
-        if (ignoreKinds.includes(kindStr)) {
-            return null; // 무시
-        }
-        
-        // Bounds 값 확인
-        if (!layer.bounds) return null;
-        const l = getNum(layer.bounds.left);
-        const t = getNum(layer.bounds.top);
-        const r = getNum(layer.bounds.right);
-        const b = getNum(layer.bounds.bottom);
-        
-        if (isNaN(l) || isNaN(t) || isNaN(r) || isNaN(b)) return null;
-        if (l === 0 && t === 0 && r === 0 && b === 0) return null; // 완전 빈껍데기 방어
-        
-        return { left: l, top: t, right: r, bottom: b };
+        console.error("Visual Raster Bounds 산출 실패:", err);
+        return null; // 실패시 fallback
     }
 }
 
@@ -192,10 +157,10 @@ async function applyHorizontalGap() {
                 return true;
             });
             
-            // [버그 수정 4] 무거운 그룹의 Bounds 1회 캐싱 + C++ 마스크 무시 영역 조회
+            // [버그 수정 4] 무거운 그룹의 Bounds 1회 캐싱 + 초궁극의 마스크 무시 래스터 영역 조회
             const layersData = [];
             for (const layer of topmostLayers) {
-                const rb = await getRealBoundsInfo(layer) || { 
+                const rb = await getVisualRasterBounds(layer, doc) || { 
                     left: getNum(layer.bounds.left), right: getNum(layer.bounds.right) 
                 };
                 layersData.push({
@@ -278,10 +243,10 @@ async function applyVerticalGap() {
                 return true;
             });
             
-            // [버그 수정 4] 무거운 그룹의 Bounds 1회 캐싱 + C++ 마스크 무시 영역 조회
+            // [버그 수정 4] 무거운 그룹의 Bounds 1회 캐싱 + 초궁극의 마스크 무시 래스터 영역 조회
             const layersData = [];
             for (const layer of topmostLayers) {
-                const rb = await getRealBoundsInfo(layer) || { 
+                const rb = await getVisualRasterBounds(layer, doc) || { 
                     top: getNum(layer.bounds.top), bottom: getNum(layer.bounds.bottom) 
                 };
                 layersData.push({
