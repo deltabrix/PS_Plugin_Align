@@ -66,7 +66,46 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // 값 형태가 Object(UnitValue)일 수 있으므로 순수한 Number로 변환하는 헬퍼 함수
-const getNum = (val) => (val && typeof val === 'object' && val.value !== undefined) ? Number(val.value) : Number(val);
+const getNum = (val) => {
+    if (val === undefined || val === null) return 0;
+    if (typeof val === 'object') {
+        if (val.value !== undefined) return Number(val.value);
+        if (val._value !== undefined) return Number(val._value); // BatchPlay 속성 대응
+    }
+    return Number(val);
+};
+
+// [궁극의 해결책] C++ 엔진인 BatchPlay를 직접 호출하여 "마스크(Mask)"와 "효과(Effect)"가 완전히 제외된 순수 픽셀 영역(boundsNoMask)만 추출하는 비동기 함수
+async function getRealBoundsInfo(layer) {
+    try {
+        const bp = await batchPlay([
+            {
+                "_obj": "get",
+                "_target": [
+                    { "_property": "boundsNoMask" },
+                    { "_ref": "layer", "_id": layer.id }
+                ]
+            }
+        ], {});
+        
+        let b = bp[0].boundsNoMask;
+        
+        if (b) {
+            const l = getNum(b.left);
+            const t = getNum(b.top);
+            const r = getNum(b.right);
+            const bm = getNum(b.bottom);
+            if (!isNaN(l) && !isNaN(t) && !isNaN(r) && !isNaN(bm)) {
+                 return { left: l, top: t, right: r, bottom: bm };
+            }
+        }
+    } catch(err) {
+        console.error("boundsNoMask 실패:", err);
+    }
+    
+    // 만약 boundsNoMask 호출 실패 시 (구버전 포토샵), 기존의 재귀 검색(getRealBounds) 폴백
+    return getRealBounds(layer);
+}
 
 // [신규 기능] 그룹 내부를 검사하여 Adjustment Layer (무한 캔버스 마스크) 등을 제외한 '실제' 픽셀 영역만 계산
 function getRealBounds(layer) {
@@ -153,17 +192,18 @@ async function applyHorizontalGap() {
                 return true;
             });
             
-            // [버그 수정 2] 무거운 그룹의 Bounds 1회 캐싱 + Adjustment Layer 크기 무시
-            const layersData = topmostLayers.map(layer => {
-                const rb = getRealBounds(layer) || { 
+            // [버그 수정 4] 무거운 그룹의 Bounds 1회 캐싱 + C++ 마스크 무시 영역 조회
+            const layersData = [];
+            for (const layer of topmostLayers) {
+                const rb = await getRealBoundsInfo(layer) || { 
                     left: getNum(layer.bounds.left), right: getNum(layer.bounds.right) 
                 };
-                return {
+                layersData.push({
                     layer: layer,
                     left: rb.left,
                     right: rb.right
-                };
-            });
+                });
+            }
             
             if (layersData.length === 1) {
                 // 레이어 1개만 선택 시: 캔버스 왼쪽 끝(0) 기준 정렬
@@ -238,17 +278,18 @@ async function applyVerticalGap() {
                 return true;
             });
             
-            // [버그 수정 2] 무거운 그룹의 Bounds 1회 캐싱 + Adjustment Layer 크기 무시
-            const layersData = topmostLayers.map(layer => {
-                const rb = getRealBounds(layer) || { 
+            // [버그 수정 4] 무거운 그룹의 Bounds 1회 캐싱 + C++ 마스크 무시 영역 조회
+            const layersData = [];
+            for (const layer of topmostLayers) {
+                const rb = await getRealBoundsInfo(layer) || { 
                     top: getNum(layer.bounds.top), bottom: getNum(layer.bounds.bottom) 
                 };
-                return {
+                layersData.push({
                     layer: layer,
                     top: rb.top,
                     bottom: rb.bottom
-                };
-            });
+                });
+            }
             
             if (layersData.length === 1) {
                 const targetLayer = layersData[0].layer;
