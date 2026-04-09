@@ -45,6 +45,8 @@ sp-label {
     font-size: 13px;
     outline: none;
     cursor: text;
+    user-select: text !important;
+    -webkit-user-select: text !important;
     white-space: nowrap;
     overflow: hidden;
     padding-bottom: 2px; /* 폰트 베이스라인 시각적 중앙 보정 */

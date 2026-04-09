@@ -29,14 +29,19 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("apply-vert").addEventListener("click", () => applyVerticalGap());
 
     [inputHoriz, inputVert].forEach(input => {
-        // [중요 버그수정] keydown뿐만 아니라 keyup, keypress에서도 탈취당하지 않도록 방어
-        input.addEventListener("keyup", (e) => e.stopPropagation());
-        input.addEventListener("keypress", (e) => e.stopPropagation());
+        // [중요 버그수정] keydown 캡처를 통한 포토샵 UXP 호스트의 단축키 탈취 원천 차단
+        // 단, keypress/keyup까지 막으면 contenteditable의 네이티브 텍스트 입력 자체가 먹통이 되므로 제외
         
         input.addEventListener("focus", (e) => {
             const target = e.target;
             target.dataset.oldVal = target.textContent.trim();
-            target.textContent = "";
+            
+            // 입력칸 전체 선택 (값을 비우지 않음으로써 클릭 시 DOM이 붕괴되는 버그 해결)
+            const range = document.createRange();
+            range.selectNodeContents(target);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
         });
         
         input.addEventListener("blur", (e) => {
