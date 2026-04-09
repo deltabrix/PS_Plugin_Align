@@ -1,0 +1,43 @@
+{
+  "id": "com.deltabrix.aligngap",
+  "name": "Advanced Align",
+  "version": "1.0.1",
+  "main": "index.html",
+  "host": [
+    {
+      "app": "PS",
+      "minVersion": "24.0.0",
+      "data": {
+        "apiVersion": 2
+      }
+    }
+  ],
+  "manifestVersion": 5,
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "gapPanel",
+      "label": "Advanced Align",
+      "minimumSize": {
+        "width": 200,
+        "height": 200
+      },
+      "maximumSize": {
+        "width": 400,
+        "height": 800
+      },
+      "preferredDockedSize": {
+        "width": 240,
+        "height": 300
+      },
+      "preferredFloatingSize": {
+        "width": 240,
+        "height": 300
+      }
+    }
+  ],
+  "requiredPermissions": {
+    "localFileSystem": "plugin",
+    "allowCodeGenerationFromStrings": true
+  }
+}
