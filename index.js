@@ -68,6 +68,57 @@ document.addEventListener("DOMContentLoaded", () => {
 // 값 형태가 Object(UnitValue)일 수 있으므로 순수한 Number로 변환하는 헬퍼 함수
 const getNum = (val) => (val && typeof val === 'object' && val.value !== undefined) ? Number(val.value) : Number(val);
 
+// [신규 기능] 그룹 내부를 검사하여 Adjustment Layer (무한 캔버스 마스크) 등을 제외한 '실제' 픽셀 영역만 계산
+function getRealBounds(layer) {
+    if (layer.kind === "group" || layer.typeName === "LayerSet" || layer.isGroupLayer) {
+        let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+        let hasValidChild = false;
+        
+        if (layer.layers && layer.layers.length > 0) {
+            layer.layers.forEach(child => {
+                const b = getRealBounds(child);
+                if (b) {
+                    left = Math.min(left, b.left);
+                    top = Math.min(top, b.top);
+                    right = Math.max(right, b.right);
+                    bottom = Math.max(bottom, b.bottom);
+                    hasValidChild = true;
+                }
+            });
+        }
+        
+        if (!hasValidChild) {
+            return {
+                left: getNum(layer.bounds.left),
+                top: getNum(layer.bounds.top),
+                right: getNum(layer.bounds.right),
+                bottom: getNum(layer.bounds.bottom)
+            };
+        }
+        return { left, top, right, bottom };
+    } else {
+        const kindStr = layer.kind ? layer.kind.toString().toUpperCase() : "";
+        // 화면 전역을 덮어 Bounds를 망가뜨리는 녀석들 총망라
+        const ignoreKinds = [
+            "BRIGHTNESSCONTRAST", "LEVELS", "CURVES", "EXPOSURE", "VIBRANCE", 
+            "HUESATURATION", "COLORBALANCE", "BLACKANDWHITE", "PHOTOFILTER", 
+            "CHANNELMIXER", "COLORLOOKUP", "INVERT", "POSTERIZE", "THRESHOLD", 
+            "GRADIENTMAP", "SELECTIVECOLOR", "PATTERNFILL", "GRADIENTFILL", "SOLIDCOLOR", "ADJUSTMENT"
+        ];
+        
+        if (ignoreKinds.includes(kindStr)) {
+            return null; // 무시 (크기 합산에서 제외)
+        }
+        
+        return { 
+            left: getNum(layer.bounds.left), 
+            top: getNum(layer.bounds.top), 
+            right: getNum(layer.bounds.right), 
+            bottom: getNum(layer.bounds.bottom) 
+        };
+    }
+}
+
 async function applyHorizontalGap() {
     try {
         const input = document.getElementById("horiz-gap");
@@ -98,12 +149,17 @@ async function applyHorizontalGap() {
                 return true;
             });
             
-            // [버그 수정 2] 무거운 그룹의 Bounds를 매번(N^2) 계산해서 PS가 꺼지는 현상 완벽 방지 (최초 1회 캐싱)
-            const layersData = topmostLayers.map(layer => ({
-                layer: layer,
-                left: getNum(layer.bounds.left),
-                right: getNum(layer.bounds.right)
-            }));
+            // [버그 수정 2] 무거운 그룹의 Bounds 1회 캐싱 + Adjustment Layer 크기 무시
+            const layersData = topmostLayers.map(layer => {
+                const rb = getRealBounds(layer) || { 
+                    left: getNum(layer.bounds.left), right: getNum(layer.bounds.right) 
+                };
+                return {
+                    layer: layer,
+                    left: rb.left,
+                    right: rb.right
+                };
+            });
             
             if (layersData.length === 1) {
                 // 레이어 1개만 선택 시: 캔버스 왼쪽 끝(0) 기준 정렬
@@ -174,12 +230,17 @@ async function applyVerticalGap() {
                 return true;
             });
             
-            // [버그 수정 2] 무거운 그룹의 Bounds를 매번(N^2) 계산해서 PS가 꺼지는 현상 완벽 방지 (최초 1회 캐싱)
-            const layersData = topmostLayers.map(layer => ({
-                layer: layer,
-                top: getNum(layer.bounds.top),
-                bottom: getNum(layer.bounds.bottom)
-            }));
+            // [버그 수정 2] 무거운 그룹의 Bounds 1회 캐싱 + Adjustment Layer 크기 무시
+            const layersData = topmostLayers.map(layer => {
+                const rb = getRealBounds(layer) || { 
+                    top: getNum(layer.bounds.top), bottom: getNum(layer.bounds.bottom) 
+                };
+                return {
+                    layer: layer,
+                    top: rb.top,
+                    bottom: rb.bottom
+                };
+            });
             
             if (layersData.length === 1) {
                 const targetLayer = layersData[0].layer;
