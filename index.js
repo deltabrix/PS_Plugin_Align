@@ -70,35 +70,34 @@ const getNum = (val) => (val && typeof val === 'object' && val.value !== undefin
 
 // [신규 기능] 그룹 내부를 검사하여 Adjustment Layer (무한 캔버스 마스크) 등을 제외한 '실제' 픽셀 영역만 계산
 function getRealBounds(layer) {
-    if (layer.kind === "group" || layer.typeName === "LayerSet" || layer.isGroupLayer) {
+    // UXP DOM에서 폴더/그룹은 주로 children 속성(또는 layers)에 내부 요소들이 배열로 담깁니다.
+    const childrenNodes = layer.children || layer.layers || [];
+    
+    if ((layer.kind && (layer.kind === "group" || layer.kind.toString().toLowerCase().includes("group"))) || layer.typeName === "LayerSet" || layer.isGroupLayer || childrenNodes.length > 0) {
         let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
         let hasValidChild = false;
         
-        if (layer.layers && layer.layers.length > 0) {
-            layer.layers.forEach(child => {
-                const b = getRealBounds(child);
-                if (b) {
-                    left = Math.min(left, b.left);
-                    top = Math.min(top, b.top);
-                    right = Math.max(right, b.right);
-                    bottom = Math.max(bottom, b.bottom);
-                    hasValidChild = true;
-                }
-            });
-        }
+        childrenNodes.forEach(child => {
+            const b = getRealBounds(child);
+            if (b && !isNaN(b.left) && !isNaN(b.top)) {
+                left = Math.min(left, b.left);
+                top = Math.min(top, b.top);
+                right = Math.max(right, b.right);
+                bottom = Math.max(bottom, b.bottom);
+                hasValidChild = true;
+            }
+        });
         
-        if (!hasValidChild) {
-            return {
-                left: getNum(layer.bounds.left),
-                top: getNum(layer.bounds.top),
-                right: getNum(layer.bounds.right),
-                bottom: getNum(layer.bounds.bottom)
-            };
+        if (hasValidChild && left !== Infinity) {
+            return { left, top, right, bottom };
         }
-        return { left, top, right, bottom };
-    } else {
+        // 유효한 자식이 없으면 억지로 자신의 bounds를 반환하지 않고 null 처리 (보정 레이어로 꽉 찬 빈 그룹 등)
+        return null;
+    } 
+    else {
+        // 단일 개체일 때
         const kindStr = layer.kind ? layer.kind.toString().toUpperCase() : "";
-        // 화면 전역을 덮어 Bounds를 망가뜨리는 녀석들 총망라
+        // 화면 전역을 덮어 Bounds를 팽창시키는 보정 레이어 류
         const ignoreKinds = [
             "BRIGHTNESSCONTRAST", "LEVELS", "CURVES", "EXPOSURE", "VIBRANCE", 
             "HUESATURATION", "COLORBALANCE", "BLACKANDWHITE", "PHOTOFILTER", 
@@ -107,15 +106,20 @@ function getRealBounds(layer) {
         ];
         
         if (ignoreKinds.includes(kindStr)) {
-            return null; // 무시 (크기 합산에서 제외)
+            return null; // 무시
         }
         
-        return { 
-            left: getNum(layer.bounds.left), 
-            top: getNum(layer.bounds.top), 
-            right: getNum(layer.bounds.right), 
-            bottom: getNum(layer.bounds.bottom) 
-        };
+        // Bounds 값 확인
+        if (!layer.bounds) return null;
+        const l = getNum(layer.bounds.left);
+        const t = getNum(layer.bounds.top);
+        const r = getNum(layer.bounds.right);
+        const b = getNum(layer.bounds.bottom);
+        
+        if (isNaN(l) || isNaN(t) || isNaN(r) || isNaN(b)) return null;
+        if (l === 0 && t === 0 && r === 0 && b === 0) return null; // 완전 빈껍데기 방어
+        
+        return { left: l, top: t, right: r, bottom: b };
     }
 }
 
@@ -176,6 +180,10 @@ async function applyHorizontalGap() {
                 
                 for (let i = 1; i < layersData.length; i++) {
                     const data = layersData[i];
+                    
+                    // 만약 getRealBounds가 완전히 null이면 굳이 이동하지 않음 (오류 방어)
+                    if (isNaN(data.left) || isNaN(data.right)) continue;
+                    
                     const targetLeftEdge = currentRightEdge + gapValue;
                     const deltaX = targetLeftEdge - data.left;
                     
@@ -255,6 +263,9 @@ async function applyVerticalGap() {
                 
                 for (let i = 1; i < layersData.length; i++) {
                     const data = layersData[i];
+                    
+                    if (isNaN(data.top) || isNaN(data.bottom)) continue;
+                    
                     const targetTopEdge = currentBottomEdge + gapValue;
                     const deltaY = targetTopEdge - data.top;
                     
