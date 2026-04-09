@@ -31,8 +31,9 @@ sp-label {
 }
 
 /* 일반 DOM 구조를 활용하여 OS 네이티브 렌더링 버그 완전 차단 및 정렬/테두리 완벽 구현 */
-.input-wrapper {
+.num-input {
     background-color: #454545;
+    color: var(--uxp-host-text-color);
     border: 1px solid #6c6c6c;
     border-radius: 4px;
     width: 90px;
@@ -41,31 +42,18 @@ sp-label {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
+    font-size: 13px;
+    outline: none;
+    cursor: text;
+    white-space: nowrap;
     overflow: hidden;
+    padding-bottom: 2px; /* 폰트 베이스라인 시각적 중앙 보정 */
     transition: border-color 0.15s ease-in-out;
 }
 
-.input-wrapper:focus-within {
+.num-input:focus, .num-input:focus-within {
     border-color: #2680eb;
     box-shadow: 0 0 0 1px #2680eb;
-}
-
-input.ghost-input {
-    appearance: none !important;
-    -webkit-appearance: none !important;
-    background-color: #454545 !important;
-    color: var(--uxp-host-text-color) !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
-    width: 100% !important;
-    height: 100% !important;
-    box-sizing: border-box !important;
-    font-size: 13px !important;
-    text-align: center !important;
-    margin: 0 !important;
-    padding: 0 0 2px 0 !important;
-    font-family: inherit !important;
 }
 
 /* 새로 추가된 적용 버튼 */

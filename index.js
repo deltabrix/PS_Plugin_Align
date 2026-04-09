@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const inputVert = document.getElementById("vert-gap");
 
     inputHoriz.addEventListener("keydown", (e) => {
+        e.stopPropagation(); // 포토샵 키보드 단축키 탈취 방지 핵심 코드!!!
         if (e.key === "Enter" || e.keyCode === 13) {
             e.preventDefault(); // 텍스트박스 줄바꿈 차단
             e.target.blur();
@@ -16,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
     inputVert.addEventListener("keydown", (e) => {
+        e.stopPropagation(); // 포토샵 키보드 단축키 탈취 방지 핵심 코드!!!
         if (e.key === "Enter" || e.keyCode === 13) {
             e.preventDefault(); // 텍스트박스 줄바꿈 차단
             e.target.blur();
@@ -27,17 +29,28 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("apply-vert").addEventListener("click", () => applyVerticalGap());
 
     [inputHoriz, inputVert].forEach(input => {
+        // [중요 버그수정] keydown뿐만 아니라 keyup, keypress에서도 탈취당하지 않도록 방어
+        input.addEventListener("keyup", (e) => e.stopPropagation());
+        input.addEventListener("keypress", (e) => e.stopPropagation());
+        
         input.addEventListener("focus", (e) => {
             const target = e.target;
-            target.dataset.oldVal = target.value.trim();
-            target.value = "";
+            target.dataset.oldVal = target.textContent.trim();
+            target.textContent = "";
         });
         
         input.addEventListener("blur", (e) => {
             const target = e.target;
-            if (target.value.trim() === "") {
-                target.value = target.dataset.oldVal || "0";
+            if (target.textContent.trim() === "") {
+                target.textContent = target.dataset.oldVal || "0";
             }
+        });
+        
+        // 엔터키 줄바꿈 등 텍스트 편집기 기본 동작 방지
+        input.addEventListener("paste", (e) => {
+            e.preventDefault();
+            const text = (e.clipboardData || window.clipboardData).getData('text');
+            document.execCommand('insertText', false, text);
         });
     });
 
@@ -58,7 +71,7 @@ const getNum = (val) => (val && typeof val === 'object' && val.value !== undefin
 async function applyHorizontalGap() {
     try {
         const input = document.getElementById("horiz-gap");
-        let gapValueStr = input.value.trim();
+        let gapValueStr = input.textContent.trim();
         // 빈칸인 채로 엔터를 누르면 원래 저장해둔 값으로 복구해서 실행
         if (gapValueStr === "") gapValueStr = input.dataset.oldVal || "0";
         
@@ -134,7 +147,7 @@ async function applyHorizontalGap() {
 async function applyVerticalGap() {
     try {
         const input = document.getElementById("vert-gap");
-        let gapValueStr = input.value.trim();
+        let gapValueStr = input.textContent.trim();
         // 빈칸인 채로 엔터를 누르면 원래 저장해둔 값으로 복구해서 실행
         if (gapValueStr === "") gapValueStr = input.dataset.oldVal || "0";
 
