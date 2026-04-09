@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
         input.addEventListener("focus", (e) => {
             const target = e.target;
             target.dataset.oldVal = target.value.trim();
-            target.select(); // 네이티브 input의 깔끔한 전체 텍스트 블록 지정
+            target.value = ""; // 사용자 요청: 클릭 시 무조건 텅 비워버리기
         });
         
         input.addEventListener("blur", (e) => {
