@@ -51,7 +51,7 @@ sp-label {
 .ghost-input {
     appearance: none !important;
     -webkit-appearance: none !important;
-    background-color: transparent !important;
+    background-color: #454545 !important;
     color: var(--uxp-host-text-color) !important;
     border: none !important;
     box-shadow: none !important;
