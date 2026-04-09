@@ -74,38 +74,54 @@ async function applyHorizontalGap() {
                  throw new Error("정렬할 레이어를 선택해주세요.");
             }
             
-            if (originalSelection.length === 1) {
-                // [요청] 레이어 1개만 선택 시: 캔버스 왼쪽 끝(0) 기준 정렬
-                const layer = originalSelection[0];
-                const layerLeftEdge = getNum(layer.bounds.left);
-                // 캔버스 왼쪽 = 0 이므로 목표 위치는 gapValue
-                const deltaX = gapValue - layerLeftEdge;
-                
+            // [버그 수정 1] 다중 선택 시 그룹 하위 레이어 무시하고 '가장 큰 그룹 덩어리'만 인식
+            const selectedIds = new Set(originalSelection.map(l => l.id));
+            const topmostLayers = originalSelection.filter(layer => {
+                let p = layer.parent;
+                while (p && p.typeName !== "Document") {
+                    if (selectedIds.has(p.id)) return false;
+                    p = p.parent;
+                }
+                return true;
+            });
+            
+            // [버그 수정 2] 무거운 그룹의 Bounds를 매번(N^2) 계산해서 PS가 꺼지는 현상 완벽 방지 (최초 1회 캐싱)
+            const layersData = topmostLayers.map(layer => ({
+                layer: layer,
+                left: getNum(layer.bounds.left),
+                right: getNum(layer.bounds.right)
+            }));
+            
+            if (layersData.length === 1) {
+                // 레이어 1개만 선택 시: 캔버스 왼쪽 끝(0) 기준 정렬
+                const targetLayer = layersData[0].layer;
+                const deltaX = gapValue - layersData[0].left;
                 if (Math.abs(deltaX) > 0.01) {
-                    await layer.translate(deltaX, 0);
+                    await targetLayer.translate(deltaX, 0);
                 }
             } else {
-                // 기존 배열 정렬 로직 (다중 선택)
-                let selectedLayers = [...originalSelection];
-                selectedLayers.sort((a, b) => getNum(a.bounds.left) - getNum(b.bounds.left));
+                // 다중 선택 시 정렬
+                layersData.sort((a, b) => a.left - b.left);
                 
-                let currentRightEdge = getNum(selectedLayers[0].bounds.right);
+                let currentRightEdge = layersData[0].right;
                 
-                for (let i = 1; i < selectedLayers.length; i++) {
-                    const layer = selectedLayers[i];
-                    const layerLeftEdge = getNum(layer.bounds.left);
+                for (let i = 1; i < layersData.length; i++) {
+                    const data = layersData[i];
                     const targetLeftEdge = currentRightEdge + gapValue;
-                    const deltaX = targetLeftEdge - layerLeftEdge;
+                    const deltaX = targetLeftEdge - data.left;
                     
                     if (Math.abs(deltaX) > 0.01) {
-                        doc.activeLayers = [layer];
-                        await layer.translate(deltaX, 0);
+                        // [버그 수정 3] 번쩍이더라도 반드시 해당 레이어만 단독 선택해야 함.
+                        // 다중 선택 상태에서 translate를 실행하면 포토샵이 선택된 모든 그룹을 동시에 옮겨버려 우주로 날아감.
+                        doc.activeLayers = [data.layer];
+                        await data.layer.translate(deltaX, 0);
                     }
                     
-                    const layerWidth = getNum(layer.bounds.right) - getNum(layer.bounds.left);
+                    const layerWidth = data.right - data.left;
                     currentRightEdge = targetLeftEdge + layerWidth;
                 }
                 
+                // 작업 완료 후 원래 상태로 선택 복구
                 doc.activeLayers = originalSelection;
             }
         }, {"commandName": "가로 간격 조절"});
@@ -134,37 +150,51 @@ async function applyVerticalGap() {
                  throw new Error("정렬할 레이어를 선택해주세요.");
             }
             
-            if (originalSelection.length === 1) {
-                // [요청] 레이어 1개만 선택 시: 캔버스 위쪽 끝(0) 기준 정렬
-                const layer = originalSelection[0];
-                const layerTopEdge = getNum(layer.bounds.top);
-                // 캔버스 위쪽 = 0 이므로 목표 위치는 gapValue
-                const deltaY = gapValue - layerTopEdge;
-                
+            // [버그 수정 1] 다중 선택 시 그룹 하위 레이어 무시하고 '가장 큰 그룹 덩어리'만 인식
+            const selectedIds = new Set(originalSelection.map(l => l.id));
+            const topmostLayers = originalSelection.filter(layer => {
+                let p = layer.parent;
+                while (p && p.typeName !== "Document") {
+                    if (selectedIds.has(p.id)) return false;
+                    p = p.parent;
+                }
+                return true;
+            });
+            
+            // [버그 수정 2] 무거운 그룹의 Bounds를 매번(N^2) 계산해서 PS가 꺼지는 현상 완벽 방지 (최초 1회 캐싱)
+            const layersData = topmostLayers.map(layer => ({
+                layer: layer,
+                top: getNum(layer.bounds.top),
+                bottom: getNum(layer.bounds.bottom)
+            }));
+            
+            if (layersData.length === 1) {
+                const targetLayer = layersData[0].layer;
+                const deltaY = gapValue - layersData[0].top;
                 if (Math.abs(deltaY) > 0.01) {
-                    await layer.translate(0, deltaY);
+                    await targetLayer.translate(0, deltaY);
                 }
             } else {
-                let selectedLayers = [...originalSelection];
-                selectedLayers.sort((a, b) => getNum(a.bounds.top) - getNum(b.bounds.top));
+                layersData.sort((a, b) => a.top - b.top);
                 
-                let currentBottomEdge = getNum(selectedLayers[0].bounds.bottom);
+                let currentBottomEdge = layersData[0].bottom;
                 
-                for (let i = 1; i < selectedLayers.length; i++) {
-                    const layer = selectedLayers[i];
-                    const layerTopEdge = getNum(layer.bounds.top);
+                for (let i = 1; i < layersData.length; i++) {
+                    const data = layersData[i];
                     const targetTopEdge = currentBottomEdge + gapValue;
-                    const deltaY = targetTopEdge - layerTopEdge;
+                    const deltaY = targetTopEdge - data.top;
                     
                     if (Math.abs(deltaY) > 0.01) {
-                        doc.activeLayers = [layer];
-                        await layer.translate(0, deltaY);
+                        // [버그 수정 3] 다중 선택 오프셋 중첩 방지를 위해 단독 선택 후 이동
+                        doc.activeLayers = [data.layer];
+                        await data.layer.translate(0, deltaY);
                     }
                     
-                    const layerHeight = getNum(layer.bounds.bottom) - getNum(layer.bounds.top);
+                    const layerHeight = data.bottom - data.top;
                     currentBottomEdge = targetTopEdge + layerHeight;
                 }
                 
+                // 작업 완료 후 원래 상태로 선택 복구
                 doc.activeLayers = originalSelection;
             }
         }, {"commandName": "세로 간격 조절"});
