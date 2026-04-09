@@ -18,6 +18,10 @@
       "type": "panel",
       "id": "gapPanel",
       "label": "Advanced Align",
+      "icons": [
+        { "width": 24, "height": 24, "path": "icon.png", "scale": 1 },
+        { "width": 48, "height": 48, "path": "icon48.png", "scale": 2 }
+      ],
       "minimumSize": {
         "width": 200,
         "height": 200
@@ -35,6 +39,10 @@
         "height": 300
       }
     }
+  ],
+  "icons": [
+    { "width": 24, "height": 24, "path": "icon.png", "scale": 1 },
+    { "width": 48, "height": 48, "path": "icon48.png", "scale": 2 }
   ],
   "requiredPermissions": {
     "localFileSystem": "plugin",
