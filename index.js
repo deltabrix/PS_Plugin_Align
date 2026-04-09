@@ -30,24 +30,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     [inputHoriz, inputVert].forEach(input => {
         // [중요 버그수정] keydown 캡처를 통한 포토샵 UXP 호스트의 단축키 탈취 원천 차단
-        // 단, keypress/keyup까지 막으면 contenteditable의 네이티브 텍스트 입력 자체가 먹통이 되므로 제외
         
         input.addEventListener("focus", (e) => {
             const target = e.target;
-            target.dataset.oldVal = target.textContent.trim();
-            
-            // 입력칸 전체 선택 (값을 비우지 않음으로써 클릭 시 DOM이 붕괴되는 버그 해결)
-            const range = document.createRange();
-            range.selectNodeContents(target);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
+            target.dataset.oldVal = target.value.trim();
+            target.select(); // 네이티브 input의 깔끔한 전체 텍스트 블록 지정
         });
         
         input.addEventListener("blur", (e) => {
             const target = e.target;
-            if (target.textContent.trim() === "") {
-                target.textContent = target.dataset.oldVal || "0";
+            if (target.value.trim() === "") {
+                target.value = target.dataset.oldVal || "0";
             }
         });
         
@@ -135,7 +128,7 @@ async function getVisualRasterBounds(layer, doc) {
 async function applyHorizontalGap() {
     try {
         const input = document.getElementById("horiz-gap");
-        let gapValueStr = input.textContent.trim();
+        let gapValueStr = input.value.trim();
         // 빈칸인 채로 엔터를 누르면 원래 저장해둔 값으로 복구해서 실행
         if (gapValueStr === "") gapValueStr = input.dataset.oldVal || "0";
         
@@ -221,7 +214,7 @@ async function applyHorizontalGap() {
 async function applyVerticalGap() {
     try {
         const input = document.getElementById("vert-gap");
-        let gapValueStr = input.textContent.trim();
+        let gapValueStr = input.value.trim();
         // 빈칸인 채로 엔터를 누르면 원래 저장해둔 값으로 복구해서 실행
         if (gapValueStr === "") gapValueStr = input.dataset.oldVal || "0";
 

@@ -38,19 +38,21 @@ sp-label {
     border-radius: 4px;
     width: 90px;
     height: 24px;
-    display: flex; /* 내부 요소 완벽 중앙 정렬 강제 */
-    align-items: center;
-    justify-content: center;
     box-sizing: border-box;
     font-size: 13px;
     outline: none;
     cursor: text;
-    user-select: text !important;
-    -webkit-user-select: text !important;
-    white-space: nowrap;
-    overflow: hidden;
-    padding-bottom: 2px; /* 폰트 베이스라인 시각적 중앙 보정 */
+    text-align: left;
+    padding-left: 36px; /* 포토샵 네이티브 입력창에서 text-align:center가 무시되는 버그를 스킵하는 강제 여백 중앙 꼼수 */
+    padding-bottom: 2px;
     transition: border-color 0.15s ease-in-out;
+}
+
+/* 숫자 입력 화살표 숨기기 */
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .num-input:focus, .num-input:focus-within {
