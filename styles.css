@@ -30,34 +30,43 @@ sp-label {
     font-size: 11px;
 }
 
-/* 일반 DOM 구조를 활용하여 OS 네이티브 렌더링 버그 완전 차단 및 정렬/테두리 완벽 구현 */
-.num-input {
+/* 일반 DOM 구조를 활용하여 OS 네이티브 렌더링 버그 및 테두리 충돌 완전 차단 */
+.input-wrapper {
     background-color: #454545;
-    color: var(--uxp-host-text-color);
     border: 1px solid #6c6c6c;
     border-radius: 4px;
     width: 90px;
     height: 24px;
     box-sizing: border-box;
-    font-size: 13px;
-    outline: none;
-    cursor: text;
-    text-align: left;
-    padding-left: 36px; /* 포토샵 네이티브 입력창에서 text-align:center가 무시되는 버그를 스킵하는 강제 여백 중앙 꼼수 */
-    padding-bottom: 2px;
+    overflow: hidden;
     transition: border-color 0.15s ease-in-out;
+    display: block;
 }
 
-/* 숫자 입력 화살표 숨기기 */
-.num-input::-webkit-outer-spin-button,
-.num-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.num-input:focus, .num-input:focus-within {
+.input-wrapper:focus-within {
     border-color: #2680eb;
     box-shadow: 0 0 0 1px #2680eb;
+}
+
+.ghost-input {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    background-color: transparent !important;
+    color: var(--uxp-host-text-color) !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    font-size: 13px !important;
+    cursor: text !important;
+    margin: 0 !important;
+    font-family: inherit !important;
+    
+    /* 포토샵 네이티브 입력창 텍스트 정렬 무시 버그를 스킵하는 강제 여백 중앙 꼼수 */
+    text-align: left !important;
+    padding: 0 0 2px 36px !important;
 }
 
 /* 새로 추가된 적용 버튼 */
