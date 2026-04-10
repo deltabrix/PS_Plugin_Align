@@ -295,21 +295,36 @@ async function applyVerticalGap() {
 
 // 기본 Align 기능 실행 헬퍼
 async function execAlign(alignmentStr) {
-    if (!app.activeDocument || app.activeDocument.activeLayers.length < 2) {
-        app.showAlert("정렬하려면 최소 2개 이상의 레이어를 선택하세요.");
+    const doc = app.activeDocument;
+    if (!doc || doc.activeLayers.length === 0) {
+        app.showAlert("정렬할 레이어를 한 개 이상 선택해주세요.");
         return;
     }
     try {
         await core.executeAsModal(async () => {
-            await batchPlay([
-                {
-                    "_obj": "align",
-                    "_target": [
-                        { "_ref": "layer", "_enum": "ordinal", "_value": "targetEnum" }
-                    ],
-                    "using": { "_enum": "alignDistributeSelector", "_value": alignmentStr }
-                }
-            ], {});
+            if (doc.activeLayers.length === 1) {
+                // 단일 객체 선택 시: 캔버스 전체를 선택 영역으로 잡고 정렬한 뒤 해제 (포토샵 네이티브 캔버스 정렬 트릭)
+                await batchPlay([
+                    { "_obj": "set", "_target": [ { "_ref": "channel", "_property": "selection" } ], "to": { "_enum": "ordinal", "_value": "allEnum" } },
+                    {
+                        "_obj": "align",
+                        "_target": [ { "_ref": "layer", "_enum": "ordinal", "_value": "targetEnum" } ],
+                        "using": { "_enum": "alignDistributeSelector", "_value": alignmentStr }
+                    },
+                    { "_obj": "set", "_target": [ { "_ref": "channel", "_property": "selection" } ], "to": { "_enum": "ordinal", "_value": "none" } }
+                ], {});
+            } else {
+                // 다중 객체 선택 시: 객체들끼리 상호 정렬
+                await batchPlay([
+                    {
+                        "_obj": "align",
+                        "_target": [
+                            { "_ref": "layer", "_enum": "ordinal", "_value": "targetEnum" }
+                        ],
+                        "using": { "_enum": "alignDistributeSelector", "_value": alignmentStr }
+                    }
+                ], {});
+            }
         }, {"commandName": "기본 정렬 (" + alignmentStr + ")"});
     } catch(err) {
         app.showAlert("정렬 중 오류가 발생했습니다: " + err.message);

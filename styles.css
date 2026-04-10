@@ -73,9 +73,9 @@ sp-label {
 .apply-btn {
     appearance: none;
     -webkit-appearance: none;
-    background-color: #5a5a5a;
+    background-color: #656565;
     color: var(--uxp-host-text-color);
-    border: 1px solid #6c6c6c;
+    border: 1px solid #757575;
     border-radius: 4px;
     width: 90px;
     height: 24px;
@@ -89,11 +89,11 @@ sp-label {
 }
 
 .apply-btn:hover {
-    background-color: #6a6a6a;
+    background-color: #757575;
 }
 
 .apply-btn:active {
-    background-color: #454545;
+    background-color: #505050;
 }
 
 /* 구분선 */
