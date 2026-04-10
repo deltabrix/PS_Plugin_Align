@@ -75,9 +75,17 @@ const getNum = (val) => {
 
 // [초궁극의 해결책] 레이어를 임시 복제 -> 빈 그룹으로 묶기 -> 병합(Cmd+E)하여 마스크/보정레이어/숨겨진 찌꺼기를 화면에 보이는 순수 픽셀(알맹이) 하나로 완벽하게 구워낸 뒤 크기를 재고 삭제하는 비동기 함수
 async function getVisualRasterBounds(layer, doc) {
+    // [치명적 버그 수정] 원본 레이어 ID를 미리 기록해두어, 실패 시 임시 복제물을 반드시 청소
+    const originalLayerIds = new Set(Array.from(doc.layers || []).map(function collectIds(l) {
+        const ids = [l.id];
+        const children = l.children || l.layers || [];
+        children.forEach(c => ids.push(...collectIds(c)));
+        return ids;
+    }).flat());
+    
+    const originalSelection = Array.from(doc.activeLayers || []);
+    
     try {
-        const originalSelection = Array.from(doc.activeLayers || []);
-        
         // 1. 레이어 원본 안전하게 복제
         const dup = await layer.duplicate();
         doc.activeLayers = [dup];
@@ -111,7 +119,7 @@ async function getVisualRasterBounds(layer, doc) {
         await mergedLayer.delete();
         
         // 선택 복구
-        doc.activeLayers = originalSelection;
+        try { doc.activeLayers = originalSelection; } catch(e) {}
         
         // 완전 빈 껍데기 방지
         if (rb.left === 0 && rb.right === 0 && rb.top === 0 && rb.bottom === 0) return null;
@@ -121,7 +129,26 @@ async function getVisualRasterBounds(layer, doc) {
         
     } catch(err) {
         console.error("Visual Raster Bounds 산출 실패:", err);
-        return null; // 실패시 fallback
+        
+        // [치명적 버그 수정] 실패 시 남아있는 임시 복제 레이어를 반드시 청소!
+        // 현재 활성 레이어가 원본 목록에 없는 "낯선 레이어"라면 복제 잔해이므로 삭제
+        try {
+            const currentActive = doc.activeLayers;
+            if (currentActive && currentActive.length > 0) {
+                for (const activeLayer of currentActive) {
+                    if (!originalLayerIds.has(activeLayer.id)) {
+                        await activeLayer.delete();
+                    }
+                }
+            }
+        } catch(cleanupErr) {
+            console.error("임시 레이어 청소 실패:", cleanupErr);
+        }
+        
+        // 선택 복구
+        try { doc.activeLayers = originalSelection; } catch(e) {}
+        
+        return null; // 실패시 fallback (layer.bounds 사용)
     }
 }
 
