@@ -73,84 +73,65 @@ const getNum = (val) => {
     return Number(val);
 };
 
-// [초궁극의 해결책] 레이어를 임시 복제 -> 빈 그룹으로 묶기 -> 병합(Cmd+E)하여 마스크/보정레이어/숨겨진 찌꺼기를 화면에 보이는 순수 픽셀(알맹이) 하나로 완벽하게 구워낸 뒤 크기를 재고 삭제하는 비동기 함수
-async function getVisualRasterBounds(layer, doc) {
-    // [치명적 버그 수정] 원본 레이어 ID를 미리 기록해두어, 실패 시 임시 복제물을 반드시 청소
-    const originalLayerIds = new Set(Array.from(doc.layers || []).map(function collectIds(l) {
-        const ids = [l.id];
-        const children = l.children || l.layers || [];
-        children.forEach(c => ids.push(...collectIds(c)));
-        return ids;
-    }).flat());
+// ──────────────────────────────────────────────────────────
+// 초고속 직관적 바운드 측정 엔진 (복잡도 ZERO, 렉 ZERO)
+// ──────────────────────────────────────────────────────────
+// 사용자의 요구: "마스크나 adjustment layer 등 당장 눈에 보이지 않는 것들은 무시해라."
+// 해답: 가장 빠르고 오류가 없는 순수 DOM bounds를 쓰되, 
+// 그룹 크기를 우주 밖으로 날려버리던 주범(조정 레이어, 캔버스 꽉 채우는 배경/마스크 레이어)만 걸러냅니다.
+
+function getBounds(layer, docW, docH) {
+    if (!layer.visible) return null;
     
-    const originalSelection = Array.from(doc.activeLayers || []);
-    
-    try {
-        // 1. 레이어 원본 안전하게 복제
-        const dup = await layer.duplicate();
-        doc.activeLayers = [dup];
-        
-        // 2. 복제된 레이어를 그룹으로 묶기 (Cmd+G) => 배경 등과 섞이지 않고 모든 마스크/효과를 가두기 위함
-        await batchPlay([
-            {
-                "_obj": "make",
-                "_target": [ { "_ref": "layerSection" } ],
-                "from": { "_ref": "layer", "_enum": "ordinal", "_value": "targetEnum" }
+    // 1. 조정 레이어 등 쓸모없는 레이어 무시
+    const ignorableKinds = [
+        "blackAndWhite", "brightnessContrast", "channelMixer", "colorBalance", 
+        "curves", "exposure", "hueSaturation", "invert", "levels", "photoFilter", 
+        "posterize", "selectiveColor", "threshold", "vibrance", "colorLookup"
+    ];
+    if (ignorableKinds.includes(layer.kind)) return null;
+
+    // 그룹일 경우 하위 레이어들을 탐색하여 '실제 내용물'의 크기만 합산
+    if (layer.kind === "group" || (layer.layers && layer.layers.length > 0)) {
+        let minL = Infinity, minT = Infinity, maxR = -Infinity, maxB = -Infinity;
+        let valid = false;
+        const children = layer.layers ? Array.from(layer.layers) : [];
+        for (const child of children) {
+            const cb = getBounds(child, docW, docH);
+            if (cb) {
+                valid = true;
+                if (cb.left < minL) minL = cb.left;
+                if (cb.top < minT) minT = cb.top;
+                if (cb.right > maxR) maxR = cb.right;
+                if (cb.bottom > maxB) maxB = cb.bottom;
             }
-        ], {});
-        
-        // 3. 그룹 병합 (Cmd+E) => 이 순간 모든 마스크 영역은 잘려나가고, 오직 눈에 보이는 픽셀들만 하나로 뭉침!
-        await batchPlay([
-            { "_obj": "mergeLayersNew" }
-        ], {});
-        
-        // 4. 구워진 단일 픽셀 레이어의 Bounds 수집
-        const mergedLayer = doc.activeLayers[0];
-        const b = mergedLayer.bounds;
-        
-        const rb = {
-            left: getNum(b.left),
-            top: getNum(b.top),
-            right: getNum(b.right),
-            bottom: getNum(b.bottom)
-        };
-        
-        // 5. 사용 끝난 더미 레이어 영구 삭제 조치
-        await mergedLayer.delete();
-        
-        // 선택 복구
-        try { doc.activeLayers = originalSelection; } catch(e) {}
-        
-        // 완전 빈 껍데기 방지
-        if (rb.left === 0 && rb.right === 0 && rb.top === 0 && rb.bottom === 0) return null;
-        if (isNaN(rb.left) || isNaN(rb.right) || isNaN(rb.top) || isNaN(rb.bottom)) return null;
-        
-        return rb;
-        
-    } catch(err) {
-        console.error("Visual Raster Bounds 산출 실패:", err);
-        
-        // [치명적 버그 수정] 실패 시 남아있는 임시 복제 레이어를 반드시 청소!
-        // 현재 활성 레이어가 원본 목록에 없는 "낯선 레이어"라면 복제 잔해이므로 삭제
-        try {
-            const currentActive = doc.activeLayers;
-            if (currentActive && currentActive.length > 0) {
-                for (const activeLayer of currentActive) {
-                    if (!originalLayerIds.has(activeLayer.id)) {
-                        await activeLayer.delete();
-                    }
-                }
-            }
-        } catch(cleanupErr) {
-            console.error("임시 레이어 청소 실패:", cleanupErr);
         }
-        
-        // 선택 복구
-        try { doc.activeLayers = originalSelection; } catch(e) {}
-        
-        return null; // 실패시 fallback (layer.bounds 사용)
+        if (valid) return { left: minL, top: minT, right: maxR, bottom: maxB };
+        return null;
+    }
+
+    // 일반 레이어의 Bounds 계산
+    try {
+        const b = layer.bounds;
+        const left = getNum(b.left);
+        const top = getNum(b.top);
+        const right = getNum(b.right);
+        const bottom = getNum(b.bottom);
+
+        // [핵심 버그 픽스]
+        // 만약 레이어가 캔버스 전체를 완전히 덮고 있다면(예: 배경색, 꽉 찬 마스크 등) 
+        // 이는 그룹 크기를 부풀려 정렬을 망가뜨리는 주범이므로 크기 계산에서 제외합니다.
+        if (left <= 0 && top <= 0 && right >= docW && bottom >= docH) {
+            return null; 
+        }
+
+        return { left, top, right, bottom };
+    } catch(e) {
+        return null;
     }
 }
+
+
 
 async function applyHorizontalGap() {
     try {
@@ -182,16 +163,20 @@ async function applyHorizontalGap() {
                 return true;
             });
             
-            // [버그 수정 4] 무거운 그룹의 Bounds 1회 캐싱 + 초궁극의 마스크 무시 래스터 영역 조회
+            const docW = doc.width;
+            const docH = doc.height;
+            
+            // 빠르고 정확한 Bounds 읽기
             const layersData = [];
             for (const layer of topmostLayers) {
-                const rb = await getVisualRasterBounds(layer, doc) || { 
-                    left: getNum(layer.bounds.left), right: getNum(layer.bounds.right) 
-                };
+                let b = getBounds(layer, docW, docH);
+                if (!b) {
+                    b = { left: getNum(layer.bounds.left), right: getNum(layer.bounds.right) };
+                }
                 layersData.push({
                     layer: layer,
-                    left: rb.left,
-                    right: rb.right
+                    left: b.left,
+                    right: b.right
                 });
             }
             
@@ -200,6 +185,7 @@ async function applyHorizontalGap() {
                 const targetLayer = layersData[0].layer;
                 const deltaX = gapValue - layersData[0].left;
                 if (Math.abs(deltaX) > 0.01) {
+                    doc.activeLayers = [targetLayer];
                     await targetLayer.translate(deltaX, 0);
                 }
             } else {
@@ -218,8 +204,7 @@ async function applyHorizontalGap() {
                     const deltaX = targetLeftEdge - data.left;
                     
                     if (Math.abs(deltaX) > 0.01) {
-                        // [버그 수정 3] 번쩍이더라도 반드시 해당 레이어만 단독 선택해야 함.
-                        // 다중 선택 상태에서 translate를 실행하면 포토샵이 선택된 모든 그룹을 동시에 옮겨버려 우주로 날아감.
+                        // 다중 선택 버그 방지를 위해 무조건 단독 선택 후 이동
                         doc.activeLayers = [data.layer];
                         await data.layer.translate(deltaX, 0);
                     }
@@ -268,16 +253,20 @@ async function applyVerticalGap() {
                 return true;
             });
             
-            // [버그 수정 4] 무거운 그룹의 Bounds 1회 캐싱 + 초궁극의 마스크 무시 래스터 영역 조회
+            const docW = doc.width;
+            const docH = doc.height;
+            
+            // 빠르고 정확한 Bounds 읽기
             const layersData = [];
             for (const layer of topmostLayers) {
-                const rb = await getVisualRasterBounds(layer, doc) || { 
-                    top: getNum(layer.bounds.top), bottom: getNum(layer.bounds.bottom) 
-                };
+                let b = getBounds(layer, docW, docH);
+                if (!b) {
+                    b = { top: getNum(layer.bounds.top), bottom: getNum(layer.bounds.bottom) };
+                }
                 layersData.push({
                     layer: layer,
-                    top: rb.top,
-                    bottom: rb.bottom
+                    top: b.top,
+                    bottom: b.bottom
                 });
             }
             
@@ -285,6 +274,7 @@ async function applyVerticalGap() {
                 const targetLayer = layersData[0].layer;
                 const deltaY = gapValue - layersData[0].top;
                 if (Math.abs(deltaY) > 0.01) {
+                    doc.activeLayers = [targetLayer];
                     await targetLayer.translate(0, deltaY);
                 }
             } else {
@@ -301,7 +291,7 @@ async function applyVerticalGap() {
                     const deltaY = targetTopEdge - data.top;
                     
                     if (Math.abs(deltaY) > 0.01) {
-                        // [버그 수정 3] 다중 선택 오프셋 중첩 방지를 위해 단독 선택 후 이동
+                        // 다중 선택 버그 방지를 위해 무조건 단독 선택 후 이동
                         doc.activeLayers = [data.layer];
                         await data.layer.translate(0, deltaY);
                     }

@@ -1,5 +1,5 @@
 {
-  "id": "com.deltabrix.aligngap",
+  "id": "com.deltabrix.advancedalign",
   "name": "Advanced Align",
   "version": "1.0.1",
   "main": "index.html",
@@ -19,8 +19,8 @@
       "id": "gapPanel",
       "label": "Advanced Align",
       "icons": [
-        { "width": 24, "height": 24, "path": "icon.png", "scale": 1 },
-        { "width": 48, "height": 48, "path": "icon48.png", "scale": 2 }
+        { "width": 23, "height": 23, "path": "icon/icon_23x23.png", "scale": 1 },
+        { "width": 46, "height": 46, "path": "icon/icon_46x46.png", "scale": 2 }
       ],
       "minimumSize": {
         "width": 200,
@@ -41,8 +41,10 @@
     }
   ],
   "icons": [
-    { "width": 24, "height": 24, "path": "icon.png", "scale": 1 },
-    { "width": 48, "height": 48, "path": "icon48.png", "scale": 2 }
+    { "width": 24, "height": 24, "path": "icon/icon_24x24.png", "scale": 1, "species": ["pluginList"] },
+    { "width": 48, "height": 48, "path": "icon/icon_48x48.png", "scale": 2, "species": ["pluginList"] },
+    { "width": 96, "height": 96, "path": "icon/icon_96x96.png", "scale": 1, "species": ["pluginList"] },
+    { "width": 192, "height": 192, "path": "icon/icon_192x192.png", "scale": 2, "species": ["pluginList"] }
   ],
   "requiredPermissions": {
     "localFileSystem": "plugin",
